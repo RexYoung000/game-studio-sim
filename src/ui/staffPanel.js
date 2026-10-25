@@ -1,11 +1,19 @@
 // 左栏：员工与招聘
 import { STAT_LABELS, roleById } from '../data/staff.js';
-import { staffCap } from '../systems/staff.js';
+import { STAFF_LEVEL_THRESHOLDS } from '../data/balance.js';
+import { staffCap, STAFF_LEVEL_MAX } from '../systems/staff.js';
 
 function fatigueClass(v) {
   if (v < 10) return 'bar-fill danger';
   if (v < 30) return 'bar-fill warn';
   return 'bar-fill ok';
+}
+
+function levelLabel(staff) {
+  const level = staff.level || 1;
+  if (level >= STAFF_LEVEL_MAX) return `Lv.${level} MAX`;
+  const need = STAFF_LEVEL_THRESHOLDS[level - 1];
+  return `Lv.${level} · 经验 ${Math.floor(staff.exp || 0)}/${need}`;
 }
 
 function staffCard(staff) {
@@ -17,6 +25,7 @@ function staffCard(staff) {
         <span class="staff-role" style="color:${role.color}">${staff.roleName}</span>
         ${staff.status === 'resting' ? '<span class="tag">休息中</span>' : ''}
       </div>
+      <div class="tiny muted">${levelLabel(staff)}</div>
       <div class="fatigue">
         <div class="bar"><div class="${fatigueClass(staff.fatigue)}" style="width:${staff.fatigue}%"></div></div>
         <span class="tiny">体力 ${Math.round(staff.fatigue)}</span>

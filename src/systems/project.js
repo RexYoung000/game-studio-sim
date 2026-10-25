@@ -4,7 +4,7 @@ import { getGenre, getTheme, fitOf } from '../data/genres.js';
 import { EVENTS, eventById } from '../data/events.js';
 import { roleById } from '../data/staff.js';
 import { computeScore, computeUnits, fatigueFactor, LINE_KEYS } from './sales.js';
-import { randomWorkingStaff } from './staff.js';
+import { randomWorkingStaff, addStaffExp } from './staff.js';
 import { addFans, addExp } from './progression.js';
 import { addLog, addNews, clamp, getYear } from '../state.js';
 import { chance, weightedPick, nextRandom } from '../rng.js';
@@ -100,6 +100,7 @@ export function tickProject(state) {
     if (gain <= 0) continue;
     dpGain += gain;
     project.lines[role.mainLine] += gain;
+    addStaffExp(state, staff, gain);  // 经验 = 当周实际贡献（PRD FR-5）
   }
 
   project.dp = clamp(project.dp + dpGain, 0, project.dpNeed);

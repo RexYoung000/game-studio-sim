@@ -4,11 +4,11 @@ import { createNewState, getYear, getWeekOfYear, loadState } from '../src/state.
 import { computeScore, computeUnits } from '../src/systems/sales.js';
 import { startProject, tickProject, resolveEvent, releaseGame } from '../src/systems/project.js';
 import { advanceWeek, bootstrap } from '../src/systems/clock.js';
-import { paySalaries } from '../src/systems/staff.js';
+import { paySalaries, addStaffExp, restStaff } from '../src/systems/staff.js';
 import { checkEnd } from '../src/systems/progression.js';
 import { getPlatform, platformState } from '../src/data/platforms.js';
 import { fitOf } from '../src/data/genres.js';
-import { MAX_SALARY_FAILURES } from '../src/data/balance.js';
+import { MAX_SALARY_FAILURES, STAFF_LEVEL_THRESHOLDS, STAFF_SALARY_LEVEL_RATE } from '../src/data/balance.js';
 
 let passed = 0;
 const failures = [];
@@ -233,7 +233,68 @@ test('旧存档缺少 salaryFailures 时按 0 读取', () => {
   }
 });
 
-console.log('\n[7] 契合度矩阵完整性');
+console.log('\n[7] 员工经验与等级成长（T-003）');
+
+test('参与开发按当周实际贡献累计经验，休息/跳过周/体力见底不涨', () => {
+  const s = createNewState(42);
+  bootstrap(s);
+  startProject(s, { platform: 'fc800', genre: 'rpg', theme: 'fantasy' });
+  const worker = s.staff[0];
+  const rester = s.staff[1];
+  restStaff(s, rester.id);
+
+  tickProject(s);
+  const afterWeek1 = worker.exp;
+  assert.ok(afterWeek1 > 0, '在研员工应获得经验');
+
+  worker.skipWeek = true;
+  tickProject(s);
+  assert.equal(worker.exp, afterWeek1, 'skipWeek 不涨经验');
+  worker.skipWeek = false;
+
+  worker.fatigue = 0;
+  tickProject(s);
+  assert.equal(worker.exp, afterWeek1, '体力为 0 无产出不涨经验');
+
+  assert.equal(rester.exp, 0, '休息员工不涨经验');
+  assert.equal(rester.level, 1);
+});
+
+test('经验分批累积到门槛升级，薪水按比例上涨并写 staff 日志', () => {
+  const s = createNewState(42);
+  const staff = s.staff[0];
+  const need = STAFF_LEVEL_THRESHOLDS[0];
+  const salaryBefore = staff.salary;
+
+  assert.equal(addStaffExp(s, staff, need - 1), 0);
+  assert.equal(staff.level, 1);
+  assert.equal(staff.exp, need - 1);
+
+  assert.equal(addStaffExp(s, staff, 1), 1);
+  assert.equal(staff.level, 2);
+  assert.equal(staff.exp, 0);
+  const raise = Math.max(1, Math.round(salaryBefore * STAFF_SALARY_LEVEL_RATE));
+  assert.equal(staff.salary, salaryBefore + raise, '升级应按比例涨薪');
+  assert.ok(staff.salary > salaryBefore);
+  assert.ok(s.log.some((l) => l.kind === 'staff' && l.text.includes('升到 Lv.2')), '应写升级日志');
+});
+
+test('等级上限 5，满级后继续加经验不再升级、不涨薪', () => {
+  const s = createNewState(42);
+  const staff = s.staff[0];
+  for (let i = 0; i < STAFF_LEVEL_THRESHOLDS.length; i += 1) {
+    assert.equal(addStaffExp(s, staff, STAFF_LEVEL_THRESHOLDS[i]), 1);
+  }
+  assert.equal(staff.level, 5);
+  const salaryAtMax = staff.salary;
+
+  assert.equal(addStaffExp(s, staff, 9999), 0);
+  assert.equal(staff.level, 5);
+  assert.equal(staff.salary, salaryAtMax);
+  assert.equal(staff.exp, 0);
+});
+
+console.log('\n[8] 契合度矩阵完整性');
 
 test('7 类型 × 8 主题全部有值且落在合法档位', () => {
   const genres = ['rpg', 'action', 'sim', 'adv', 'puzzle', 'racing', 'love'];

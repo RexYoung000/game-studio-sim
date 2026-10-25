@@ -35,6 +35,9 @@ export const COMPETITOR_SCORE_MIN = 20;
 export const COMPETITOR_SCORE_MAX = 33;
 
 export const LEVEL_THRESHOLDS = [0, 120, 320, 650, 1000];   // 达到等级 N 所需累计经验
+// 员工等级：索引 0-3 分别对应 1→2 / 2→3 / 3→4 / 4→5 级所需经验（PRD FR-5）
+export const STAFF_LEVEL_THRESHOLDS = [120, 220, 300, 360];
+export const STAFF_SALARY_LEVEL_RATE = 0.08; // 每升 1 级薪水上涨 8%
 export const LEVEL_STAFF_CAP = [3, 4, 5, 6, 8];
 export const PLAN_FEE_RATE = 0.5;       // 企划费 = 平台授权费 × 0.5
 export const HIRE_FEE_PER_STAT = 4;     // 签约金 = 主能力和 × 4 万

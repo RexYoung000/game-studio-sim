@@ -1,6 +1,9 @@
 // 员工系统：招聘、体力、培训、薪水（PRD FR-5）
 import { ROLES, NAMES, roleById } from '../data/staff.js';
-import { LEVEL_STAFF_CAP, HIRE_FEE_PER_STAT, TRAIN_FEE_PER_POINT, STAT_MAX, MAX_SALARY_FAILURES } from '../data/balance.js';
+import {
+  LEVEL_STAFF_CAP, HIRE_FEE_PER_STAT, TRAIN_FEE_PER_POINT, STAT_MAX, MAX_SALARY_FAILURES,
+  STAFF_LEVEL_THRESHOLDS, STAFF_SALARY_LEVEL_RATE,
+} from '../data/balance.js';
 import { randInt, pickRandom, nextRandom } from '../rng.js';
 import { addLog, addNews, clamp } from '../state.js';
 
@@ -60,6 +63,31 @@ export function hireStaff(state, candidateId) {
   state.candidates = state.candidates.filter((c) => c.id !== candidateId);
   addLog(state, `${candidate.name}（${candidate.roleName}）入职，签约金 ${candidate.signing} 万。`, 'staff');
   return { ok: true };
+}
+
+export const STAFF_LEVEL_MAX = STAFF_LEVEL_THRESHOLDS.length + 1;
+
+// 累计经验并升级（上限 5 级），每升 1 级按比例涨薪，至少 +1 万（PRD FR-5）
+export function addStaffExp(state, staff, amount) {
+  const gain = Number(amount) || 0;
+  if (!staff || gain <= 0) return 0;
+  staff.level = staff.level || 1;
+  staff.exp = staff.exp || 0;
+  if (staff.level >= STAFF_LEVEL_MAX) return 0;
+
+  staff.exp += gain;
+  let levelUps = 0;
+  let threshold = STAFF_LEVEL_THRESHOLDS[staff.level - 1];
+  while (staff.level < STAFF_LEVEL_MAX && staff.exp >= threshold) {
+    staff.exp -= threshold;
+    staff.level += 1;
+    staff.salary += Math.max(1, Math.round(staff.salary * STAFF_SALARY_LEVEL_RATE));
+    levelUps += 1;
+    addLog(state, `${staff.name} 升到 Lv.${staff.level}，月薪涨到 ${staff.salary} 万。`, 'staff');
+    if (staff.level < STAFF_LEVEL_MAX) threshold = STAFF_LEVEL_THRESHOLDS[staff.level - 1];
+  }
+  if (staff.level >= STAFF_LEVEL_MAX) staff.exp = 0;
+  return levelUps;
 }
 
 export function trainStaff(state, staffId, statKey) {
