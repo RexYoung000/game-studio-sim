@@ -1,6 +1,6 @@
 // 成长线与年度结算：粉丝、经验、等级、大奖、终局（PRD FR-7）
 import { getYear, addLog, addNews, clamp } from '../state.js';
-import { LEVEL_THRESHOLDS, LEVEL_STAFF_CAP, AWARD_CASH, AWARD_FANS, AWARD_EXP, COMPETITOR_SCORE_MIN, COMPETITOR_SCORE_MAX } from '../data/balance.js';
+import { LEVEL_THRESHOLDS, LEVEL_STAFF_CAP, AWARD_CASH, AWARD_FANS, AWARD_EXP, COMPETITOR_SCORE_MIN, COMPETITOR_SCORE_MAX, MAX_SALARY_FAILURES } from '../data/balance.js';
 import { randInt } from '../rng.js';
 
 export function addFans(state, delta) {
@@ -76,7 +76,7 @@ export function checkEnd(state) {
     state.endReason = 'finished';
     return 'finished';
   }
-  if (state.cash < 0) {
+  if (state.salaryFailures >= MAX_SALARY_FAILURES) {
     state.ended = true;
     state.endReason = 'bankrupt';
     return 'bankrupt';

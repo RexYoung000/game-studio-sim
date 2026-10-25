@@ -1,11 +1,14 @@
 // 纯函数与结算测试：node tests/run.mjs
 import assert from 'node:assert/strict';
-import { createNewState, getYear, getWeekOfYear } from '../src/state.js';
+import { createNewState, getYear, getWeekOfYear, loadState } from '../src/state.js';
 import { computeScore, computeUnits } from '../src/systems/sales.js';
 import { startProject, tickProject, resolveEvent, releaseGame } from '../src/systems/project.js';
 import { advanceWeek, bootstrap } from '../src/systems/clock.js';
+import { paySalaries } from '../src/systems/staff.js';
+import { checkEnd } from '../src/systems/progression.js';
 import { getPlatform, platformState } from '../src/data/platforms.js';
 import { fitOf } from '../src/data/genres.js';
+import { MAX_SALARY_FAILURES } from '../src/data/balance.js';
 
 let passed = 0;
 const failures = [];
@@ -29,6 +32,7 @@ test('起始现金 100 万、2 名员工、等级 1', () => {
   assert.equal(s.staff.length, 2);
   assert.equal(s.level, 1);
   assert.equal(s.week, 1);
+  assert.equal(s.salaryFailures, 0);
   assert.equal(getYear(s), 1);
   assert.equal(getWeekOfYear(s), 1);
 });
@@ -134,14 +138,16 @@ test('推进 52 周触发年度结算与次年年初事件', () => {
   assert.ok(s.lastYearSummary);
 });
 
-test('破产：现金为负即结束', () => {
+test('发薪日现金不足：不破产，只记一次欠薪', () => {
   const s = createNewState(42);
   s.cash = 1;
   s.week = 3;
   const r = advanceWeek(s);
   assert.equal(r.ok, true);
-  assert.equal(s.ended, true);
-  assert.equal(s.endReason, 'bankrupt');
+  assert.equal(s.cash, 1, '欠薪不应把现金扣成负数');
+  assert.equal(s.salaryFailures, 1);
+  assert.equal(s.ended, false);
+  assert.equal(s.endReason, '');
 });
 
 test('事件待处理时禁止推进', () => {
@@ -155,7 +161,79 @@ test('事件待处理时禁止推进', () => {
   assert.equal(advanceWeek(s).ok, true);
 });
 
-console.log('\n[6] 契合度矩阵完整性');
+console.log('\n[6] 薪水扣款失败与破产（T-002）');
+
+test('现金不足时发薪不产生负现金，salaryFailures +1，写 warn 日志与新闻', () => {
+  const s = createNewState(42);
+  s.cash = 1;
+  const newsBefore = s.news.length;
+  const r = paySalaries(s);
+  assert.equal(r.ok, false);
+  assert.equal(r.failed, true);
+  assert.equal(s.cash, 1);
+  assert.equal(s.salaryFailures, 1);
+  assert.equal(checkEnd(s), '');
+  assert.equal(s.ended, false);
+  assert.ok(s.log.some((l) => l.kind === 'warn' && l.text.includes('欠薪')), '应写 warn 日志');
+  assert.equal(s.news.length, newsBefore + 1, '应发一条欠薪新闻');
+});
+
+test('连续两次欠薪后 salaryFailures 达到阈值，checkEnd 返回 bankrupt', () => {
+  const s = createNewState(42);
+  s.cash = 1;
+  s.week = 3;
+  advanceWeek(s); // 第 4 周发薪：第一次失败
+  assert.equal(s.salaryFailures, 1);
+  assert.equal(s.ended, false);
+
+  s.week = 7;
+  const r = advanceWeek(s); // 第 8 周发薪：第二次失败
+  assert.equal(s.salaryFailures, MAX_SALARY_FAILURES);
+  assert.equal(s.cash, 1);
+  assert.equal(r.ended, true);
+  assert.equal(s.ended, true);
+  assert.equal(s.endReason, 'bankrupt');
+});
+
+test('成功发薪会把 salaryFailures 归零', () => {
+  const s = createNewState(42);
+  s.salaryFailures = 1;
+  s.week = 3;
+  advanceWeek(s); // 第 4 周发薪：现金充足
+  assert.equal(s.salaryFailures, 0);
+  assert.equal(s.cash, 94);
+  assert.equal(s.ended, false);
+});
+
+test('现金为负但欠薪未达阈值时不提前结束', () => {
+  const s = createNewState(42);
+  s.cash = -5;
+  s.salaryFailures = 1;
+  assert.equal(checkEnd(s), '');
+  assert.equal(s.ended, false);
+});
+
+test('旧存档缺少 salaryFailures 时按 0 读取', () => {
+  const fresh = createNewState(42);
+  const { salaryFailures, ...legacy } = fresh;
+  assert.equal(salaryFailures, 0);
+  const prev = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: () => JSON.stringify(legacy),
+    setItem: () => {},
+    removeItem: () => {},
+  };
+  try {
+    const r = loadState();
+    assert.equal(r.ok, true);
+    assert.equal(r.state.salaryFailures, 0);
+  } finally {
+    if (prev === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = prev;
+  }
+});
+
+console.log('\n[7] 契合度矩阵完整性');
 
 test('7 类型 × 8 主题全部有值且落在合法档位', () => {
   const genres = ['rpg', 'action', 'sim', 'adv', 'puzzle', 'racing', 'love'];

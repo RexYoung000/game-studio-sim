@@ -11,6 +11,7 @@ export const REST_RECOVERY = 40;
 export const FATIGUE_LOW = 30;          // 低体力阈值：贡献减半
 export const FATIGUE_CRITICAL = 10;     // 强制休息阈值
 export const SALARY_INTERVAL = 4;       // 每 4 周发薪
+export const MAX_SALARY_FAILURES = 2;   // 累计欠薪次数达到该值即破产（PRD FR-5）
 
 export const DP_PER_STAT = 0.7;         // 单员工周 DP = 主能力 × 0.7 × 体力系数 × 岗位匹配
 export const CROSS_ROLE_FACTOR = 0.5;

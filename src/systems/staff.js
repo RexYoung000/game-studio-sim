@@ -1,8 +1,8 @@
 // 员工系统：招聘、体力、培训、薪水（PRD FR-5）
 import { ROLES, NAMES, roleById } from '../data/staff.js';
-import { LEVEL_STAFF_CAP, HIRE_FEE_PER_STAT, TRAIN_FEE_PER_POINT, STAT_MAX } from '../data/balance.js';
+import { LEVEL_STAFF_CAP, HIRE_FEE_PER_STAT, TRAIN_FEE_PER_POINT, STAT_MAX, MAX_SALARY_FAILURES } from '../data/balance.js';
 import { randInt, pickRandom, nextRandom } from '../rng.js';
-import { addLog, clamp } from '../state.js';
+import { addLog, addNews, clamp } from '../state.js';
 
 export function staffCap(state) {
   return LEVEL_STAFF_CAP[clamp(state.level - 1, 0, LEVEL_STAFF_CAP.length - 1)];
@@ -114,9 +114,17 @@ export function enforceRest(state) {
 
 export function paySalaries(state) {
   const total = state.staff.reduce((s, st) => s + st.salary, 0);
+  if (state.cash < total) {
+    state.salaryFailures += 1;
+    const shortfall = total - state.cash;
+    addLog(state, `发薪失败：还差 ${shortfall} 万，第 ${state.salaryFailures} 次欠薪（累计 ${MAX_SALARY_FAILURES} 次破产）。`, 'warn');
+    addNews(state, `工作室第 ${state.salaryFailures} 次发不出薪水，员工开始担心下个月的账单。`, 'warn');
+    return { ok: false, total, failed: true, shortfall, failures: state.salaryFailures };
+  }
   state.cash -= total;
+  state.salaryFailures = 0;
   addLog(state, `发薪：${state.staff.length} 人共 ${total} 万。`, 'money');
-  return { total };
+  return { ok: true, total, failed: false };
 }
 
 function statLabel(key) {

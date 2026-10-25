@@ -63,6 +63,7 @@ export function createNewState(seed = Date.now() % 1000000) {
     awards: [],
     candidates: [],
     pendingEvent: null,
+    salaryFailures: 0,
     competitorBest: 0,
     stats: { releasedCount: 0, bestScore: 0, totalRevenue: 0 },
     ended: false,
@@ -114,6 +115,8 @@ export function loadState() {
       localStorage.setItem(`${SAVE_KEY}_corrupt`, raw);
       return { ok: false, reason: 'version', state: null };
     }
+    // 兼容旧存档：缺少 salaryFailures 时按 0 处理，避免后续累加出 NaN
+    if (data.salaryFailures == null) data.salaryFailures = 0;
     return { ok: true, state: data };
   } catch {
     try { localStorage.setItem(`${SAVE_KEY}_corrupt`, raw); } catch { /* 忽略 */ }
