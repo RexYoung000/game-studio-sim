@@ -2,10 +2,11 @@
 import { availablePlatforms } from '../systems/market.js';
 import { GENRES, THEMES, fitOf, fitLabel, getGenre, getTheme } from '../data/genres.js';
 import { planningFee, projectDpNeed, weeklyDp } from '../systems/project.js';
-import { MARKETING_TIERS, TRAIN_FEE_PER_POINT, STAT_MAX } from '../data/balance.js';
+import { MARKETING_TIERS, TRAIN_FEE_PER_POINT, STAT_MAX, TOTAL_YEARS } from '../data/balance.js';
 import { STAT_LABELS } from '../data/staff.js';
 import { finalSummary } from '../systems/progression.js';
 import { getYear } from '../state.js';
+import { platformState, PHASE_LABEL } from '../data/platforms.js';
 
 let current = null;
 
@@ -38,7 +39,10 @@ function eventModal(state) {
 function projectModal(state) {
   const year = getYear(state);
   const platforms = availablePlatforms(state);
-  const pOpts = platforms.map((p) => `<option value="${p.id}">${p.name}（授权 ${p.fee} 万 · 成本 ×${p.costFactor}）</option>`).join('');
+  const pOpts = platforms.map((p) => {
+    const phase = platformState(p, year).phase;
+    return `<option value="${p.id}">${p.name}（授权 ${p.fee} 万 · 成本 ×${p.costFactor}）· ${PHASE_LABEL[phase]}</option>`;
+  }).join('');
   const gOpts = GENRES.map((g) => `<option value="${g.id}">${g.name}</option>`).join('');
   const tOpts = THEMES.map((t) => `<option value="${t.id}">${t.name}</option>`).join('');
   return wrap('立项：选平台、类型、主题', `
@@ -64,14 +68,22 @@ export function updateProjectEstimate(state) {
   const genre = getGenre(genreEl.value);
   const theme = getTheme(themeEl.value);
   if (!platform || !genre || !theme) return;
+  const year = getYear(state);
   const fee = planningFee(platform);
-  const dpNeed = projectDpNeed(genre, platform, getYear(state));
+  const dpNeed = projectDpNeed(genre, platform, year);
   const dp = Math.max(1, weeklyDp(state));
   const weeks = Math.max(1, Math.ceil(dpNeed / dp));
   const fit = fitOf(genre.id, theme.id);
+  // 只警告本局（10 年）内真的会退市的平台；retireYear=99 是「长期活跃」的哨兵值
+  const retiringSoon = platformState(platform, year).phase === 'declining'
+    && platform.retireYear <= TOTAL_YEARS;
+  const retireWarn = retiringSoon
+    ? `<div class="retire-warning">该平台将于第 ${platform.retireYear} 年退市（当前第 ${year} 年）</div>`
+    : '';
   box.innerHTML = `
     <div class="estimate-line">企划费 <b>${fee}</b> 万 · 需求 <b>${dpNeed}</b> DP · 约 <b>${weeks}</b> 周</div>
     <div class="estimate-line">相性：<b class="fit-${fitClass(fit)}">${fitLabel(fit)} ×${fit}</b>（${theme.name} × ${genre.name}）</div>
+    ${retireWarn}
   `;
 }
 

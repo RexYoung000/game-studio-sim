@@ -416,3 +416,15 @@
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 #toast.warn { border-color: var(--accent); color: var(--accent-2); }
+
+/* 立项弹层：平台退市警告（T-001） */
+.retire-warning {
+  color: var(--red);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.4;
+  border: 2px solid var(--red);
+  border-left-width: 6px;
+  background: rgba(224, 91, 91, 0.14);
+  padding: 6px 8px;
+}
