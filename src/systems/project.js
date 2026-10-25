@@ -2,7 +2,7 @@
 import { getPlatform, platformState } from '../data/platforms.js';
 import { getGenre, getTheme, fitOf } from '../data/genres.js';
 import { EVENTS, eventById } from '../data/events.js';
-import { roleById } from '../data/staff.js';
+import { ROLES, roleById } from '../data/staff.js';
 import { computeScore, computeUnits, fatigueFactor, LINE_KEYS } from './sales.js';
 import { randomWorkingStaff, addStaffExp } from './staff.js';
 import { addFans, addExp } from './progression.js';
@@ -10,7 +10,7 @@ import { addLog, addNews, clamp, getYear } from '../state.js';
 import { chance, weightedPick, nextRandom } from '../rng.js';
 import {
   EVENT_CHANCE, DP_PER_STAT, PLAN_FEE_RATE, PRICE_PER_UNIT, REVENUE_SPLIT,
-  MARKETING_TIERS, FANS_PER_UNIT, COORDINATION_PENALTY, DP_YEAR_SCALE,
+  MARKETING_TIERS, FANS_PER_UNIT, COORDINATION_PENALTY, DP_YEAR_SCALE, CROSS_ROLE_FACTOR,
 } from '../data/balance.js';
 
 export function planningFee(platform) {
@@ -27,12 +27,39 @@ export function coordinationFactor(staffCount) {
   return Math.max(0.6, 1 - COORDINATION_PENALTY * (staffCount - 1));
 }
 
+// 单员工周贡献（PRD FR-3 / 附录 D）：主能力 × DP_PER_STAT × 体力系数 × 岗位匹配系数
+// assignment 为空/缺省时按本职岗位，且计入生效岗位对应的品质线。
+export function staffContribution(state, staff, assignment) {
+  const map = assignment || (state.project && state.project.assignment) || {};
+  const effectiveRole = roleById(map[staff.id] || staff.role);
+  const mainStat = staff.stats[effectiveRole.stat] || 0;
+  const coefficient = effectiveRole.id === staff.role ? 1 : CROSS_ROLE_FACTOR;
+  return {
+    gain: mainStat * DP_PER_STAT * fatigueFactor(staff) * coefficient,
+    line: effectiveRole.mainLine,
+    role: effectiveRole,
+    crossRole: effectiveRole.id !== staff.role,
+  };
+}
+
+// 玩家操作：在研项目内把员工指派到某个岗位（project.assignment: staffId → roleId）
+export function assignStaff(state, staffId, roleId) {
+  if (!state.project) return { ok: false, error: '当前没有在研项目' };
+  const staff = state.staff.find((s) => s.id === staffId);
+  if (!staff) return { ok: false, error: '找不到该员工' };
+  if (!ROLES.some((r) => r.id === roleId)) return { ok: false, error: '岗位不存在' };
+  if (!state.project.assignment) state.project.assignment = {};
+  if (roleId === staff.role) delete state.project.assignment[staffId];
+  else state.project.assignment[staffId] = roleId;
+  return { ok: true };
+}
+
 export function weeklyDp(state) {
   const active = state.staff.filter((s) => s.status !== 'resting');
+  const assignment = state.project && state.project.assignment;
   let raw = 0;
   for (const staff of active) {
-    const role = roleById(staff.role);
-    raw += (staff.stats[role.stat] || 0) * DP_PER_STAT * fatigueFactor(staff);
+    raw += staffContribution(state, staff, assignment).gain;
   }
   return raw * coordinationFactor(active.length);
 }
@@ -67,6 +94,7 @@ export function startProject(state, { platform: platformId, genre: genreId, them
     lines: { design: 0, art: 0, sound: 0, fun: 0 },
     lineBonus: { design: 0, art: 0, sound: 0, fun: 0 },
     status: 'developing',
+    assignment: {},
     marketing: 0,
     startedWeek: state.week,
     eventCooldown: 0,
@@ -92,15 +120,15 @@ export function tickProject(state) {
   let dpGain = 0;
   const activeCount = state.staff.filter((s) => s.status !== 'resting').length;
   const coord = coordinationFactor(activeCount);
+  const assignment = project.assignment || {};
   for (const staff of state.staff) {
     if (staff.status === 'resting' || staff.skipWeek) continue;
-    const role = roleById(staff.role);
-    const mainStat = staff.stats[role.stat] || 0;
-    const gain = mainStat * DP_PER_STAT * fatigueFactor(staff) * coord;
-    if (gain <= 0) continue;
-    dpGain += gain;
-    project.lines[role.mainLine] += gain;
-    addStaffExp(state, staff, gain);  // 经验 = 当周实际贡献（PRD FR-5）
+    const { gain, line } = staffContribution(state, staff, assignment);
+    const scaled = gain * coord;
+    if (scaled <= 0) continue;
+    dpGain += scaled;
+    project.lines[line] += scaled;
+    addStaffExp(state, staff, scaled);  // 经验 = 当周实际贡献（PRD FR-5）
   }
 
   project.dp = clamp(project.dp + dpGain, 0, project.dpNeed);

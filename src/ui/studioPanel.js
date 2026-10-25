@@ -3,7 +3,7 @@ import { getPlatform, platformState } from '../data/platforms.js';
 import { getGenre, getTheme, fitLabel } from '../data/genres.js';
 import { qualityLines, LINE_KEYS } from '../systems/sales.js';
 import { estimateWeeks } from '../systems/project.js';
-import { LINE_LABELS } from '../data/staff.js';
+import { LINE_LABELS, ROLES } from '../data/staff.js';
 import { getYear } from '../state.js';
 import { renderLog } from './log.js';
 
@@ -15,6 +15,20 @@ function qualityBar(state, project, key) {
       <span class="tiny">${LINE_LABELS[key]}</span>
       <div class="bar slim"><div class="bar-fill ${value >= 8 ? 'great' : value >= 5 ? 'good' : 'meh'}" style="width:${value * 10}%"></div></div>
       <span class="tiny num">${value}</span>
+    </div>
+  `;
+}
+
+function assignmentRow(state, staff) {
+  const assigned = (state.project.assignment || {})[staff.id] || staff.role;
+  const cross = assigned !== staff.role;
+  const options = ROLES.map((r) => `<option value="${r.id}" ${r.id === assigned ? 'selected' : ''}>${r.name}</option>`).join('');
+  return `
+    <div class="form-row">
+      <label class="tiny">${staff.name}</label>
+      <select data-assign="${staff.id}">${options}</select>
+      ${cross ? '<span class="tiny warn-text">跨岗 ×0.5</span>' : '<span class="tiny muted">本职</span>'}
+      ${staff.status === 'resting' ? '<span class="tag">休息中</span>' : ''}
     </div>
   `;
 }
@@ -43,6 +57,10 @@ function projectCard(state) {
       </div>
       <div class="stats">
         ${LINE_KEYS.map((k) => qualityBar(state, p, k)).join('')}
+      </div>
+      <div class="tiny muted">岗位指派（跨岗产出 ×0.5）</div>
+      <div class="stats">
+        ${state.staff.map((staff) => assignmentRow(state, staff)).join('')}
       </div>
       <div class="project-foot">
         <span class="tiny muted">预计还需 ${weeks} 周</span>

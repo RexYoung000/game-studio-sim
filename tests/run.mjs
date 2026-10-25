@@ -1,14 +1,20 @@
 // 纯函数与结算测试：node tests/run.mjs
 import assert from 'node:assert/strict';
 import { createNewState, getYear, getWeekOfYear, loadState } from '../src/state.js';
-import { computeScore, computeUnits } from '../src/systems/sales.js';
-import { startProject, tickProject, resolveEvent, releaseGame } from '../src/systems/project.js';
+import { computeScore, computeUnits, fatigueFactor } from '../src/systems/sales.js';
+import {
+  startProject, tickProject, resolveEvent, releaseGame,
+  staffContribution, weeklyDp, assignStaff, coordinationFactor,
+} from '../src/systems/project.js';
 import { advanceWeek, bootstrap } from '../src/systems/clock.js';
 import { paySalaries, addStaffExp, restStaff } from '../src/systems/staff.js';
 import { checkEnd } from '../src/systems/progression.js';
 import { getPlatform, platformState } from '../src/data/platforms.js';
 import { fitOf } from '../src/data/genres.js';
-import { MAX_SALARY_FAILURES, STAFF_LEVEL_THRESHOLDS, STAFF_SALARY_LEVEL_RATE } from '../src/data/balance.js';
+import {
+  MAX_SALARY_FAILURES, STAFF_LEVEL_THRESHOLDS, STAFF_SALARY_LEVEL_RATE,
+  DP_PER_STAT, CROSS_ROLE_FACTOR,
+} from '../src/data/balance.js';
 
 let passed = 0;
 const failures = [];
@@ -306,6 +312,97 @@ test('7 类型 × 8 主题全部有值且落在合法档位', () => {
       assert.ok(legal.includes(fit), `${g}×${t} = ${fit} 不在合法档位`);
     }
   }
+});
+
+console.log('\n[9] 岗位匹配系数与调岗（T-004）');
+
+test('未指派时按本职岗位贡献，公式与改动前一致', () => {
+  const s = createNewState(42);
+  bootstrap(s);
+  startProject(s, { platform: 'fc800', genre: 'rpg', theme: 'fantasy' });
+  assert.deepEqual(s.project.assignment, {}, '新项目默认无指派');
+
+  const first = s.staff[0];
+  const c = staffContribution(s, first, {});
+  assert.equal(c.role.id, 'programmer');
+  assert.equal(c.line, 'fun');
+  assert.equal(c.crossRole, false);
+  assert.equal(c.gain, first.stats.code * DP_PER_STAT * fatigueFactor(first));
+
+  // weeklyDp 仍等于旧公式：各人主能力 × 0.7 × 体力系数之和 × 协调系数
+  const legacyRaw = s.staff.reduce((sum, st) => {
+    const stat = st.role === 'programmer' ? 'code' : st.role === 'artist' ? 'art' : st.role === 'sound' ? 'sound' : 'design';
+    return sum + st.stats[stat] * DP_PER_STAT * fatigueFactor(st);
+  }, 0);
+  assert.ok(Math.abs(weeklyDp(s) - legacyRaw * coordinationFactor(2)) < 1e-9);
+});
+
+test('跨岗指派 gain 恰为本职的 CROSS_ROLE_FACTOR 倍，并计入被指派岗位品质线', () => {
+  const s = createNewState(42);
+  bootstrap(s);
+  startProject(s, { platform: 'fc800', genre: 'rpg', theme: 'fantasy' });
+  const staff = s.staff[0];
+  staff.stats.art = staff.stats.code; // 同能力，便于直接比较岗位系数
+
+  const home = staffContribution(s, staff, {});
+  assert.equal(assignStaff(s, staff.id, 'artist').ok, true);
+  assert.equal(s.project.assignment[staff.id], 'artist');
+
+  const cross = staffContribution(s, staff);
+  assert.equal(cross.line, 'art', '产出应计入美术的品质线');
+  assert.equal(cross.crossRole, true);
+  assert.ok(Math.abs(cross.gain - home.gain * CROSS_ROLE_FACTOR) < 1e-9);
+  assert.equal(CROSS_ROLE_FACTOR, 0.5);
+});
+
+test('跨岗员工的实际推进只进被指派岗位品质线', () => {
+  const s = createNewState(42);
+  bootstrap(s);
+  startProject(s, { platform: 'fc800', genre: 'rpg', theme: 'fantasy' });
+  assignStaff(s, s.staff[0].id, 'artist'); // 程序员去顶美术
+  tickProject(s);
+  assert.equal(s.project.lines.fun, 0, '耐玩线不应再得到程序员产出');
+  assert.ok(s.project.lines.art > 0, '画面线应得到产出');
+});
+
+test('weeklyDp 与一周 tickProject 的 DP 增量一致（含跨岗）', () => {
+  const s = createNewState(42);
+  bootstrap(s);
+  startProject(s, { platform: 'fc800', genre: 'rpg', theme: 'fantasy' });
+  assignStaff(s, s.staff[0].id, 'artist');
+
+  const expected = weeklyDp(s);
+  const before = s.project.dp;
+  tickProject(s);
+  assert.ok(Math.abs((s.project.dp - before) - expected) < 1e-6, `预计 ${expected} 实际 ${s.project.dp - before}`);
+});
+
+test('调岗错误路径：无在研项目 / 员工不存在 / 岗位非法', () => {
+  const s = createNewState(42);
+  assert.equal(assignStaff(s, s.staff[0].id, 'artist').ok, false, '无项目应失败');
+  bootstrap(s);
+  startProject(s, { platform: 'fc800', genre: 'rpg', theme: 'fantasy' });
+  assert.equal(assignStaff(s, 'nope', 'artist').ok, false, '员工不存在应失败');
+  assert.equal(assignStaff(s, s.staff[0].id, 'ceo').ok, false, '岗位非法应失败');
+});
+
+test('指派随项目保存；发行后项目清空，重新立项 assignment 为空', () => {
+  const s = createNewState(42);
+  bootstrap(s);
+  startProject(s, { platform: 'fc800', genre: 'rpg', theme: 'fantasy' });
+  assignStaff(s, s.staff[0].id, 'artist');
+  assert.deepEqual(s.project.assignment, { [s.staff[0].id]: 'artist' });
+
+  let guard = 0;
+  while (s.project.dp < s.project.dpNeed && guard < 120) {
+    tickProject(s);
+    guard += 1;
+  }
+  assert.equal(releaseGame(s, 0).ok, true);
+  assert.equal(s.project, null, '发行后项目应置空（指派随之清空）');
+
+  assert.equal(startProject(s, { platform: 'fc800', genre: 'rpg', theme: 'fantasy' }).ok, true);
+  assert.deepEqual(s.project.assignment, {}, '重新立项不应继承旧指派');
 });
 
 console.log(`\n结果：${passed} 通过 / ${failures.length} 失败`);

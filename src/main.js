@@ -133,6 +133,14 @@ document.addEventListener('click', (evt) => {
 document.addEventListener('change', (evt) => {
   if (evt.target.matches('#p-platform, #p-genre, #p-theme')) {
     updateProjectEstimate(state);
+    return;
+  }
+  const roleSelect = evt.target.closest('[data-assign]');
+  if (roleSelect) {
+    afterAction(dispatch(state, 'ASSIGN_STAFF', {
+      id: roleSelect.dataset.assign,
+      role: roleSelect.value,
+    }));
   }
 });
 

@@ -28,9 +28,11 @@ export function eraFactor(state, platformId) {
 // 每条品质线的贡献者平均能力（按本周产出加权）
 export function lineAverages(state, project) {
   const buckets = { design: [], art: [], sound: [], fun: [] };
+  const assignment = (project && project.assignment) || {};
   for (const staff of state.staff) {
     if (staff.status === 'resting' || staff.skipWeek) continue;
-    const role = roleById(staff.role);
+    // 品质线归属跟随当前指派岗位（PRD FR-3）
+    const role = roleById(assignment[staff.id] || staff.role);
     const mainStat = staff.stats[role.stat] || 0;
     buckets[role.mainLine].push({ stat: mainStat, weight: Math.max(0.01, mainStat * fatigueFactor(staff)) });
   }
