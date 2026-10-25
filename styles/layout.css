@@ -1,0 +1,73 @@
+/* 布局：顶栏 + 三栏 */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-width: 1120px;
+}
+
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: var(--border);
+  box-shadow: 0 4px 0 var(--black);
+  height: 64px;
+  flex: 0 0 64px;
+}
+
+.topbar-left,
+.topbar-mid,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+
+.clock { color: var(--ink); }
+.clock b { color: var(--accent-2); }
+
+.layout {
+  display: grid;
+  grid-template-columns: 300px minmax(420px, 1fr) 320px;
+  gap: 12px;
+  padding: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: var(--border);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#staff-panel { overflow-y: auto; }
+
+@media (max-width: 1120px) {
+  #app::after {
+    content: "把窗口拉宽到 1120px 以上，这个游戏只做桌面横屏。";
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+}

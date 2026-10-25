@@ -1,0 +1,70 @@
+/* 像素复古风基础层：色板、字体、重置 */
+:root {
+  --bg: #0d1626;
+  --bg-grid: #16233a;
+  --panel: #1b2a42;
+  --panel-2: #243754;
+  --ink: #e8dfc8;
+  --ink-dim: #a89f8a;
+  --accent: #f2a65a;
+  --accent-2: #f7c98b;
+  --green: #7bd88f;
+  --red: #e05b5b;
+  --blue: #8ab6f9;
+  --pink: #e58fb1;
+  --black: #05080f;
+  --border: 3px solid var(--ink);
+  --shadow: 5px 5px 0 var(--black);
+  --font: "Courier New", "PingFang SC", "Microsoft YaHei", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(0deg, transparent 24%, var(--bg-grid) 25%, var(--bg-grid) 26%, transparent 27%, transparent 74%, var(--bg-grid) 75%, var(--bg-grid) 76%, transparent 77%),
+    linear-gradient(90deg, transparent 24%, var(--bg-grid) 25%, var(--bg-grid) 26%, transparent 27%, transparent 74%, var(--bg-grid) 75%, var(--bg-grid) 76%, transparent 77%);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.4px;
+  overflow: hidden;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+h1, h2, h3 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+button, select, input {
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  color: var(--ink);
+}
+
+ul {
+  list-style: none;
+}
+
+.muted { color: var(--ink-dim); }
+.tiny { font-size: 11px; }
+.num { min-width: 18px; text-align: right; display: inline-block; }
+.neg { color: var(--red); }
+.warn-text { color: var(--accent); font-size: 11px; }
